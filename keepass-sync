@@ -1,0 +1,125 @@
+#!/usr/bin/python3
+
+from configparser import ConfigParser
+from datetime import datetime
+from email.utils import parsedate
+from enum import Enum
+import gi
+import logging
+import os
+import requests
+import sys
+
+gi.require_version('Notify', '0.7')
+from gi.repository import GLib, Gio, Notify
+
+progname = os.path.basename(sys.argv[0])
+logger = logging.getLogger(progname)
+
+
+class SyncStatus(Enum):
+    IN_SYNC = 1
+    LOCAL_UPDATE = 2
+    REMOTE_UPDATE = 3
+
+
+def sync_status(session, remote_url, local_path):
+    resp = session.head(remote_url)
+    resp.raise_for_status()
+    remote_mtime = datetime(*parsedate(resp.headers['Last-Modified'])[0:6])
+    remote_size = int(resp.headers['Content-Length'])
+    logger.info('Remote mtime: %s', remote_mtime)
+    logger.info('Remote size: %i', remote_size)
+
+    local_stat = os.stat(local_path)
+    local_mtime = datetime.utcfromtimestamp(int(local_stat.st_mtime))
+    local_size = local_stat.st_size
+    logger.info('Local mtime: %s', local_mtime)
+    logger.info('Local size: %i', local_size)
+
+    if local_mtime <= remote_mtime:
+        if local_size == remote_size:
+            return SyncStatus.IN_SYNC
+        else:
+            return SyncStatus.LOCAL_UPDATE
+    else:
+        return SyncStatus.REMOTE_UPDATE
+
+
+def sync_local(session, remote_url, local_path):
+    logger.info('Local database needs update from remote')
+    notification = Notify.Notification.new(
+        'Local keepass database needs update')
+    notification.show()
+
+
+def sync_remote(session, remote_url, local_path):
+    with open(local_path, 'rb') as f:
+        resp = session.put(remote_url, f)
+    resp.raise_for_status()
+    logger.info('Remote database updated from local')
+    notification = Notify.Notification.new(
+        'Remote keepass database updated')
+    notification.show()
+
+
+def sync(settings):
+    with requests.Session() as session:
+        session.auth = (settings['remote_user'],
+                        settings['remote_password'])
+
+        status = sync_status(session, settings['remote_url'],
+                           settings['local_path'])
+        logger.info('Sync status: %s', status)
+        if status == SyncStatus.LOCAL_UPDATE:
+            sync_local(session, settings['remote_url'],
+                       settings['local_path'])
+        elif status == SyncStatus.REMOTE_UPDATE:
+            sync_remote(session, settings['remote_url'],
+                        settings['local_path'])
+
+
+def file_changed(monitor, input_file, other_file, event_type, user_data):
+    logger.debug('File monitor event received: %s', event_type)
+    if event_type in (Gio.FileMonitorEvent.CHANGED,
+                      Gio.FileMonitorEvent.CHANGES_DONE_HINT):
+        logger.info('Local file changed, syncing')
+        sync(user_data)
+
+
+def main():
+    from argparse import ArgumentParser
+    aparser = ArgumentParser(description='Sync keepass database to server')
+    aparser.add_argument('-w', '--watch', action='store_true',
+                         help='Watch for changes to database')
+    args = aparser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
+    Notify.init(progname)
+
+    config = ConfigParser()
+    config.read(os.path.expanduser('~/.config/keepass.ini'))
+    keepass_opts = config['keepass']
+    settings = {
+        'local_path': os.path.expanduser(keepass_opts['local']),
+        'remote_url': keepass_opts['remote'],
+        'remote_user': keepass_opts['user'],
+        'remote_password': keepass_opts['password'],
+    }
+
+    sync(settings)
+
+    if args.watch:
+        local_file = Gio.File.new_for_path(settings['local_path'])
+        local_monitor = Gio.File.monitor(local_file, Gio.FileMonitorFlags.NONE)
+        local_monitor.connect('changed', file_changed, settings)
+
+        loop = GLib.MainLoop.new(None, False)
+        try:
+            loop.run()
+        except KeyboardInterrupt:
+            pass
+
+
+if __name__ == '__main__':
+    main()
