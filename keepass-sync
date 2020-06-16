@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from configparser import ConfigParser
+from contextlib import contextmanager
 from datetime import datetime
 from email.utils import parsedate
 from enum import Enum
@@ -21,6 +22,12 @@ class SyncStatus(Enum):
     IN_SYNC = 1
     LOCAL_UPDATE = 2
     REMOTE_UPDATE = 3
+
+
+def sync_info(session, settings):
+    resp = session.head(settings['remote_url'])
+    resp.raise_for_status()
+    return resp
 
 
 def sync_status(session, remote_url, local_path):
@@ -69,7 +76,7 @@ def sync(settings):
                         settings['remote_password'])
 
         status = sync_status(session, settings['remote_url'],
-                           settings['local_path'])
+                             settings['local_path'])
         logger.info('Sync status: %s', status)
         if status == SyncStatus.LOCAL_UPDATE:
             sync_local(session, settings['remote_url'],
@@ -77,6 +84,14 @@ def sync(settings):
         elif status == SyncStatus.REMOTE_UPDATE:
             sync_remote(session, settings['remote_url'],
                         settings['local_path'])
+
+
+@contextmanager
+def sync_session(settings):
+    with requests.Session() as session:
+        session.auth = (settings['remote_user'],
+                        settings['remote_password'])
+        yield session
 
 
 def file_changed(monitor, input_file, other_file, event_type, user_data):
@@ -92,6 +107,8 @@ def main():
     aparser = ArgumentParser(description='Sync keepass database to server')
     aparser.add_argument('-w', '--watch', action='store_true',
                          help='Watch for changes to database')
+    aparser.add_argument('-i', '--info', action='store_true',
+                         help='Show remote file info')
     args = aparser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -106,6 +123,13 @@ def main():
         'remote_user': keepass_opts['user'],
         'remote_password': keepass_opts['password'],
     }
+
+    if args.info:
+        with sync_session(settings) as session:
+            resp = sync_info(session, settings)
+            for header, value in resp.headers.items():
+                print(f'{header}: {value}')
+        return
 
     sync(settings)
 
