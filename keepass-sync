@@ -30,6 +30,12 @@ def sync_info(session, settings):
     return resp
 
 
+def sync_download(session, settings):
+    resp = session.get(settings['remote_url'])
+    resp.raise_for_status()
+    return resp
+
+
 def sync_status(session, remote_url, local_path):
     resp = session.head(remote_url)
     resp.raise_for_status()
@@ -109,6 +115,7 @@ def main():
                          help='Watch for changes to database')
     aparser.add_argument('-i', '--info', action='store_true',
                          help='Show remote file info')
+    aparser.add_argument('-d', '--download', help='Download remote file')
     args = aparser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -129,6 +136,13 @@ def main():
             resp = sync_info(session, settings)
             for header, value in resp.headers.items():
                 print(f'{header}: {value}')
+        return
+
+    if args.download:
+        with sync_session(settings) as session:
+            resp = sync_download(session, settings)
+            with open(args.download, 'wb') as f:
+                f.write(resp.content)
         return
 
     sync(settings)
