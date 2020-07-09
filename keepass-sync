@@ -103,7 +103,8 @@ def sync_session(settings):
 def file_changed(monitor, input_file, other_file, event_type, user_data):
     logger.debug('File monitor event received: %s', event_type)
     if event_type in (Gio.FileMonitorEvent.CHANGED,
-                      Gio.FileMonitorEvent.CHANGES_DONE_HINT):
+                      Gio.FileMonitorEvent.CHANGES_DONE_HINT,
+                      Gio.FileMonitorEvent.ATTRIBUTE_CHANGED):
         logger.info('Local file changed, syncing')
         sync(user_data)
 
