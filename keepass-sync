@@ -76,11 +76,16 @@ def sync_remote(session, remote_url, local_path):
     notification.show()
 
 
-def sync(settings):
+@contextmanager
+def sync_session(settings):
     with requests.Session() as session:
         session.auth = (settings['remote_user'],
                         settings['remote_password'])
+        yield session
 
+
+def sync(settings):
+    with sync_session(settings) as session:
         status = sync_status(session, settings['remote_url'],
                              settings['local_path'])
         logger.info('Sync status: %s', status)
@@ -90,14 +95,6 @@ def sync(settings):
         elif status == SyncStatus.REMOTE_UPDATE:
             sync_remote(session, settings['remote_url'],
                         settings['local_path'])
-
-
-@contextmanager
-def sync_session(settings):
-    with requests.Session() as session:
-        session.auth = (settings['remote_user'],
-                        settings['remote_password'])
-        yield session
 
 
 def file_changed(monitor, input_file, other_file, event_type, user_data):
