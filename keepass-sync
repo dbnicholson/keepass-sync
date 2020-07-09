@@ -159,8 +159,8 @@ def main():
     Notify.init(progname)
 
     config = ConfigParser()
-    config.read(os.path.expanduser('~/.config/keepass.ini'))
-    keepass_opts = config['keepass']
+    config.read(os.path.expanduser('~/.config/keepass-sync.ini'))
+    keepass_opts = config['keepass-sync']
     settings = {
         'local_path': os.path.expanduser(keepass_opts['local']),
         'remote_url': keepass_opts['remote'],
