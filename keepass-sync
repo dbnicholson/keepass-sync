@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from calendar import timegm
 from configparser import ConfigParser
 from contextlib import contextmanager
 from datetime import datetime
@@ -26,7 +27,7 @@ class SyncStatus(Enum):
 
 def local_sync_info(settings):
     stat = os.stat(settings['local_path'])
-    mtime = datetime.utcfromtimestamp(int(stat.st_mtime))
+    mtime = int(stat.st_mtime)
     size = stat.st_size
 
     return {
@@ -43,7 +44,7 @@ def remote_info(session, settings):
 
 def remote_sync_info(session, settings):
     resp = remote_info(session, settings)
-    mtime = datetime(*parsedate(resp.headers['Last-Modified'])[0:6])
+    mtime = timegm(parsedate(resp.headers['Last-Modified']))
     size = int(resp.headers['Content-Length'])
 
     return {
@@ -60,11 +61,11 @@ def remote_download(session, settings):
 
 def sync_status(session, settings):
     remote = remote_sync_info(session, settings)
-    logger.info('Remote mtime: %s', remote['mtime'])
+    logger.info('Remote mtime: %s', datetime.fromtimestamp(remote['mtime']))
     logger.info('Remote size: %i', remote['size'])
 
     local = local_sync_info(settings)
-    logger.info('Local mtime: %s', local['mtime'])
+    logger.info('Local mtime: %s', datetime.fromtimestamp(local['mtime']))
     logger.info('Local size: %i', local['size'])
 
     if local['mtime'] <= remote['mtime']:
