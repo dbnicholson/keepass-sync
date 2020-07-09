@@ -132,6 +132,13 @@ def file_changed(monitor, input_file, other_file, event_type, user_data):
         sync(user_data)
 
 
+def poll_changes(user_data):
+    logger.debug('Polling for changes')
+    sync(user_data['settings'])
+    GLib.timeout_add(user_data['interval'], poll_changes, user_data)
+    return False
+
+
 def main():
     from argparse import ArgumentParser
     aparser = ArgumentParser(description='Sync keepass database to server')
@@ -142,6 +149,8 @@ def main():
     aparser.add_argument('-i', '--info', action='store_true',
                          help='Show remote file info')
     aparser.add_argument('-d', '--download', help='Download remote file')
+    aparser.add_argument('--interval', type=int, default=60,
+                         help='Interval to check for changes in seconds')
     aparser.add_argument('--debug', action='store_const', const=logging.DEBUG,
                          dest='log_level', default=logging.INFO,
                          help='Enable debugging messages')
@@ -183,6 +192,13 @@ def main():
         local_file = Gio.File.new_for_path(settings['local_path'])
         local_monitor = Gio.File.monitor(local_file, Gio.FileMonitorFlags.NONE)
         local_monitor.connect('changed', file_changed, settings)
+
+        poll_data = {
+            'settings': settings,
+            'interval': args.interval * 1000,
+        }
+
+        GLib.timeout_add(poll_data['interval'], poll_changes, poll_data)
 
         loop = GLib.MainLoop.new(None, False)
         try:
