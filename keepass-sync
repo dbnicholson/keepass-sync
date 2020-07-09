@@ -53,10 +53,16 @@ def remote_sync_info(session, settings):
     }
 
 
-def remote_download(session, settings):
+def remote_download(session, settings, path=None):
+    if path is None:
+        path = settings['local_path']
+
     resp = session.get(settings['remote_url'])
     resp.raise_for_status()
-    return resp
+
+    logger.debug('Saving remote data to "%s"', path)
+    with open(path, 'wb') as f:
+        f.write(resp.content)
 
 
 def sync_status(session, settings):
@@ -160,9 +166,7 @@ def main():
 
     if args.download:
         with sync_session(settings) as session:
-            resp = remote_download(session, settings)
-            with open(args.download, 'wb') as f:
-                f.write(resp.content)
+            remote_download(session, settings, args.download)
         return
 
     sync(settings)
