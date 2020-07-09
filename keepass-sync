@@ -36,15 +36,15 @@ def sync_download(session, settings):
     return resp
 
 
-def sync_status(session, remote_url, local_path):
-    resp = session.head(remote_url)
+def sync_status(session, settings):
+    resp = session.head(settings['remote_url'])
     resp.raise_for_status()
     remote_mtime = datetime(*parsedate(resp.headers['Last-Modified'])[0:6])
     remote_size = int(resp.headers['Content-Length'])
     logger.info('Remote mtime: %s', remote_mtime)
     logger.info('Remote size: %i', remote_size)
 
-    local_stat = os.stat(local_path)
+    local_stat = os.stat(settings['local_path'])
     local_mtime = datetime.utcfromtimestamp(int(local_stat.st_mtime))
     local_size = local_stat.st_size
     logger.info('Local mtime: %s', local_mtime)
@@ -59,16 +59,16 @@ def sync_status(session, remote_url, local_path):
         return SyncStatus.REMOTE_UPDATE
 
 
-def sync_local(session, remote_url, local_path):
+def sync_local(session, settings):
     logger.info('Local database needs update from remote')
     notification = Notify.Notification.new(
         'Local keepass database needs update')
     notification.show()
 
 
-def sync_remote(session, remote_url, local_path):
-    with open(local_path, 'rb') as f:
-        resp = session.put(remote_url, f)
+def sync_remote(session, settings):
+    with open(settings['local_path'], 'rb') as f:
+        resp = session.put(settings['remote_url'], f)
     resp.raise_for_status()
     logger.info('Remote database updated from local')
     notification = Notify.Notification.new(
@@ -86,15 +86,12 @@ def sync_session(settings):
 
 def sync(settings):
     with sync_session(settings) as session:
-        status = sync_status(session, settings['remote_url'],
-                             settings['local_path'])
+        status = sync_status(session, settings)
         logger.info('Sync status: %s', status)
         if status == SyncStatus.LOCAL_UPDATE:
-            sync_local(session, settings['remote_url'],
-                       settings['local_path'])
+            sync_local(session, settings)
         elif status == SyncStatus.REMOTE_UPDATE:
-            sync_remote(session, settings['remote_url'],
-                        settings['local_path'])
+            sync_remote(session, settings)
 
 
 def file_changed(monitor, input_file, other_file, event_type, user_data):
