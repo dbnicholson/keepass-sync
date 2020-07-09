@@ -1,0 +1,9 @@
+[Unit]
+Description=KeePass database synchronizer
+ConditionPathExists=%h/.config/keepass-sync.ini
+
+[Service]
+ExecStart=%h/bin/keepass-sync -w
+
+[Install]
+WantedBy=default.target
