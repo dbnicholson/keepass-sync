@@ -24,13 +24,13 @@ class SyncStatus(Enum):
     REMOTE_UPDATE = 3
 
 
-def sync_info(session, settings):
+def remote_info(session, settings):
     resp = session.head(settings['remote_url'])
     resp.raise_for_status()
     return resp
 
 
-def sync_download(session, settings):
+def remote_download(session, settings):
     resp = session.get(settings['remote_url'])
     resp.raise_for_status()
     return resp
@@ -128,14 +128,14 @@ def main():
 
     if args.info:
         with sync_session(settings) as session:
-            resp = sync_info(session, settings)
+            resp = remote_info(session, settings)
             for header, value in resp.headers.items():
                 print(f'{header}: {value}')
         return
 
     if args.download:
         with sync_session(settings) as session:
-            resp = sync_download(session, settings)
+            resp = remote_download(session, settings)
             with open(args.download, 'wb') as f:
                 f.write(resp.content)
         return
