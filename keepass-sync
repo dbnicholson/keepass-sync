@@ -113,14 +113,13 @@ def sync_session(settings):
         yield session
 
 
-def sync(settings):
-    with sync_session(settings) as session:
-        status = sync_status(session, settings)
-        logger.info('Sync status: %s', status)
-        if status == SyncStatus.LOCAL_UPDATE:
-            sync_local(session, settings)
-        elif status == SyncStatus.REMOTE_UPDATE:
-            sync_remote(session, settings)
+def sync(session, settings):
+    status = sync_status(session, settings)
+    logger.info('Sync status: %s', status)
+    if status == SyncStatus.LOCAL_UPDATE:
+        sync_local(session, settings)
+    elif status == SyncStatus.REMOTE_UPDATE:
+        sync_remote(session, settings)
 
 
 def file_changed(monitor, input_file, other_file, event_type, user_data):
@@ -129,12 +128,12 @@ def file_changed(monitor, input_file, other_file, event_type, user_data):
                       Gio.FileMonitorEvent.CHANGES_DONE_HINT,
                       Gio.FileMonitorEvent.ATTRIBUTE_CHANGED):
         logger.info('Local file changed, syncing')
-        sync(user_data)
+        sync(user_data['session'], user_data['settings'])
 
 
 def poll_changes(user_data):
     logger.debug('Polling for changes')
-    sync(user_data['settings'])
+    sync(user_data['session'], user_data['settings'])
     GLib.timeout_add(user_data['interval'], poll_changes, user_data)
     return False
 
@@ -169,36 +168,37 @@ def main():
         'remote_password': keepass_opts['password'],
     }
 
-    if args.status:
-        with sync_session(settings) as session:
+    with sync_session(settings) as session:
+        if args.status:
             sync_status(session, settings)
-        return
+            return
 
-    if args.info:
-        with sync_session(settings) as session:
+        if args.info:
             resp = remote_info(session, settings)
             for header, value in resp.headers.items():
                 print(f'{header}: {value}')
-        return
+            return
 
-    if args.download:
-        with sync_session(settings) as session:
+        if args.download:
             remote_download(session, settings, args.download)
-        return
+            return
 
-    sync(settings)
+        sync(session, settings)
 
-    if args.watch:
-        local_file = Gio.File.new_for_path(settings['local_path'])
-        local_monitor = Gio.File.monitor(local_file, Gio.FileMonitorFlags.NONE)
-        local_monitor.connect('changed', file_changed, settings)
+        if not args.watch:
+            return
 
-        poll_data = {
+        watch_data = {
+            'session': session,
             'settings': settings,
             'interval': args.interval * 1000,
         }
 
-        GLib.timeout_add(poll_data['interval'], poll_changes, poll_data)
+        local_file = Gio.File.new_for_path(settings['local_path'])
+        local_monitor = Gio.File.monitor(local_file, Gio.FileMonitorFlags.NONE)
+        local_monitor.connect('changed', file_changed, watch_data)
+
+        GLib.timeout_add(watch_data['interval'], poll_changes, watch_data)
 
         loop = GLib.MainLoop.new(None, False)
         try:
