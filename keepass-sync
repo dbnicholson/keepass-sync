@@ -24,10 +24,32 @@ class SyncStatus(Enum):
     REMOTE_UPDATE = 3
 
 
+def local_sync_info(settings):
+    stat = os.stat(settings['local_path'])
+    mtime = datetime.utcfromtimestamp(int(stat.st_mtime))
+    size = stat.st_size
+
+    return {
+        'mtime': mtime,
+        'size': size,
+    }
+
+
 def remote_info(session, settings):
     resp = session.head(settings['remote_url'])
     resp.raise_for_status()
     return resp
+
+
+def remote_sync_info(session, settings):
+    resp = remote_info(session, settings)
+    mtime = datetime(*parsedate(resp.headers['Last-Modified'])[0:6])
+    size = int(resp.headers['Content-Length'])
+
+    return {
+        'mtime': mtime,
+        'size': size,
+    }
 
 
 def remote_download(session, settings):
@@ -37,21 +59,16 @@ def remote_download(session, settings):
 
 
 def sync_status(session, settings):
-    resp = session.head(settings['remote_url'])
-    resp.raise_for_status()
-    remote_mtime = datetime(*parsedate(resp.headers['Last-Modified'])[0:6])
-    remote_size = int(resp.headers['Content-Length'])
-    logger.info('Remote mtime: %s', remote_mtime)
-    logger.info('Remote size: %i', remote_size)
+    remote = remote_sync_info(session, settings)
+    logger.info('Remote mtime: %s', remote['mtime'])
+    logger.info('Remote size: %i', remote['size'])
 
-    local_stat = os.stat(settings['local_path'])
-    local_mtime = datetime.utcfromtimestamp(int(local_stat.st_mtime))
-    local_size = local_stat.st_size
-    logger.info('Local mtime: %s', local_mtime)
-    logger.info('Local size: %i', local_size)
+    local = local_sync_info(settings)
+    logger.info('Local mtime: %s', local['mtime'])
+    logger.info('Local size: %i', local['size'])
 
-    if local_mtime <= remote_mtime:
-        if local_size == remote_size:
+    if local['mtime'] <= remote['mtime']:
+        if local['size'] == remote['size']:
             return SyncStatus.IN_SYNC
         else:
             return SyncStatus.LOCAL_UPDATE
