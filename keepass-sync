@@ -64,6 +64,10 @@ def remote_download(session, settings, path=None):
     with open(path, 'wb') as f:
         f.write(resp.content)
 
+    mtime = timegm(parsedate(resp.headers['Last-Modified']))
+    logger.debug('Setting "%s" mtime to %i', path, mtime)
+    os.utime(path, (mtime, mtime))
+
 
 def sync_status(session, settings):
     remote = remote_sync_info(session, settings)
