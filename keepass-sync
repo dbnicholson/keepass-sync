@@ -36,16 +36,17 @@ def local_sync_info(settings):
     }
 
 
+@contextmanager
 def remote_info(session, settings):
-    resp = session.head(settings['remote_url'])
-    resp.raise_for_status()
-    return resp
+    with session.head(settings['remote_url']) as resp:
+        resp.raise_for_status()
+        yield resp
 
 
 def remote_sync_info(session, settings):
-    resp = remote_info(session, settings)
-    mtime = timegm(parsedate(resp.headers['Last-Modified']))
-    size = int(resp.headers['Content-Length'])
+    with remote_info(session, settings) as resp:
+        mtime = timegm(parsedate(resp.headers['Last-Modified']))
+        size = int(resp.headers['Content-Length'])
 
     return {
         'mtime': mtime,
@@ -57,16 +58,16 @@ def remote_download(session, settings, path=None):
     if path is None:
         path = settings['local_path']
 
-    resp = session.get(settings['remote_url'])
-    resp.raise_for_status()
+    with session.get(settings['remote_url']) as resp:
+        resp.raise_for_status()
 
-    logger.debug('Saving remote data to "%s"', path)
-    with open(path, 'wb') as f:
-        f.write(resp.content)
+        logger.debug('Saving remote data to "%s"', path)
+        with open(path, 'wb') as f:
+            f.write(resp.content)
 
-    mtime = timegm(parsedate(resp.headers['Last-Modified']))
-    logger.debug('Setting "%s" mtime to %i', path, mtime)
-    os.utime(path, (mtime, mtime))
+        mtime = timegm(parsedate(resp.headers['Last-Modified']))
+        logger.debug('Setting "%s" mtime to %i', path, mtime)
+        os.utime(path, (mtime, mtime))
 
 
 def sync_status(session, settings):
@@ -97,8 +98,8 @@ def sync_local(session, settings):
 
 def sync_remote(session, settings):
     with open(settings['local_path'], 'rb') as f:
-        resp = session.put(settings['remote_url'], f)
-    resp.raise_for_status()
+        with session.put(settings['remote_url'], f) as resp:
+            resp.raise_for_status()
     logger.info('Remote database updated from local')
     notification = Notify.Notification.new(
         'Remote keepass database updated')
@@ -174,9 +175,9 @@ def main():
             return
 
         if args.info:
-            resp = remote_info(session, settings)
-            for header, value in resp.headers.items():
-                print(f'{header}: {value}')
+            with remote_info(session, settings) as resp:
+                for header, value in resp.headers.items():
+                    print(f'{header}: {value}')
             return
 
         if args.download:
