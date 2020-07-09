@@ -88,9 +88,10 @@ def sync_status(session, settings):
 
 
 def sync_local(session, settings):
-    logger.info('Local database needs update from remote')
+    remote_download(session, settings)
+    logger.info('Local database updated from remote')
     notification = Notify.Notification.new(
-        'Local keepass database needs update')
+        'Local keepass database updated')
     notification.show()
 
 
