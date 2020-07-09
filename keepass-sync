@@ -126,6 +126,8 @@ def main():
     aparser = ArgumentParser(description='Sync keepass database to server')
     aparser.add_argument('-w', '--watch', action='store_true',
                          help='Watch for changes to database')
+    aparser.add_argument('-s', '--status', action='store_true',
+                         help='Show sync status')
     aparser.add_argument('-i', '--info', action='store_true',
                          help='Show remote file info')
     aparser.add_argument('-d', '--download', help='Download remote file')
@@ -143,6 +145,11 @@ def main():
         'remote_user': keepass_opts['user'],
         'remote_password': keepass_opts['password'],
     }
+
+    if args.status:
+        with sync_session(settings) as session:
+            sync_status(session, settings)
+        return
 
     if args.info:
         with sync_session(settings) as session:
