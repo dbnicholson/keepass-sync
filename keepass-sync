@@ -134,7 +134,10 @@ def file_changed(monitor, input_file, other_file, event_type, user_data):
 
 def poll_changes(user_data):
     logger.debug('Polling for changes')
-    sync(user_data['session'], user_data['settings'])
+    try:
+        sync(user_data['session'], user_data['settings'])
+    except requests.exceptions.ConnectionError as err:
+        logger.warning('Remote connection error: %s', err)
     GLib.timeout_add(user_data['interval'], poll_changes, user_data)
     return False
 
@@ -184,7 +187,13 @@ def main():
             remote_download(session, settings, args.download)
             return
 
-        sync(session, settings)
+        try:
+            sync(session, settings)
+        except requests.exceptions.ConnectionError as err:
+            if not args.watch:
+                raise
+
+            logger.warning('Remote connection error: %s', err)
 
         if not args.watch:
             return
